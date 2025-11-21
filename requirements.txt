@@ -1,0 +1,9 @@
+Flask
+PyPDF2
+pytesseract
+Pillow
+pdf2image
+Werkzeug
+chromadb
+sentence-transformers
+gunicorn
