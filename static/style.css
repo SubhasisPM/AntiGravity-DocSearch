@@ -456,37 +456,6 @@ body {
     color: var(--accent-primary);
     border: 1px solid hsla(160, 70%, 45%, 0.2);
     border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.result-content {
-    color: var(--text-secondary);
-    line-height: 1.7;
-    margin-bottom: var(--spacing-sm);
-    font-size: 0.95rem;
-}
-
-.result-meta {
-    display: flex;
-    gap: var(--spacing-sm);
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    flex-wrap: wrap;
-}
-
-/* Documents Section */
-.documents-section h2 {
-    font-size: 1.4rem;
-    margin-bottom: var(--spacing-md);
-    color: var(--text-primary);
-}
-
-.documents-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: var(--spacing-md);
 }
 
 .document-card {

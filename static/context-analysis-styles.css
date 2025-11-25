@@ -1,0 +1,10 @@
+/* Enhanced Context Analysis Formatting */
+.response-content {
+    white-space: pre-wrap;
+    line-height: 1.9;
+}
+
+/* Handle markdown-style bold text */
+.response-content::after {
+    content: '';
+}

@@ -13,6 +13,8 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='enhanced-search-styles.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='aggregate-summary-styles.css') }}">
 </head>
 
 <body>
@@ -107,6 +109,8 @@
 
                     <!-- Search Results -->
                     <div class="search-results" id="search-results"></div>
+
+                    <!-- Aggregate Summary will be inserted here by JavaScript -->
                 </div>
             </section>
 

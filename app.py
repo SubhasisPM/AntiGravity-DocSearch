@@ -25,6 +25,15 @@ except ImportError:
     VECTOR_DB_AVAILABLE = False
     VectorMemory = None
 
+# Import enhanced search
+try:
+    from enhanced_search import enhanced_search
+    ENHANCED_SEARCH_AVAILABLE = True
+except ImportError:
+    print("Warning: Enhanced search not available.")
+    ENHANCED_SEARCH_AVAILABLE = False
+    enhanced_search = None
+
 # Flask app configuration
 app = Flask(__name__)
 app.config.update(
@@ -245,7 +254,7 @@ def upload_file():
 
 @app.route('/search', methods=['POST'])
 def search():
-    """Fast semantic search with vector DB"""
+    """Enhanced semantic search with intelligent context extraction"""
     data = request.get_json()
     query = data.get('query', '').strip()
     
@@ -260,32 +269,68 @@ def search():
     
     try:
         # Vector search (fast!)
-        results = vector_db.search(query, n_results=5)
+        raw_results = vector_db.search(query, n_results=5)
         
-        if not results:
-            return jsonify({'results': [], 'explanation': ''})
+        if not raw_results:
+            return jsonify({'results': [], 'explanation': 'No results found.'})
         
-        # Extract concise context from top result
-        top = results[0]
-        context = extract_context(top['content'], query.split())
-        
-        # Format results
-        formatted = []
-        for idx, result in enumerate(results):
-            score = int((1 - result['distance']) * 100) if result['distance'] else 100
-            formatted.append({
-                'name': result['metadata']['name'],
-                'score': score,
-                'relevance': 'high' if idx == 0 else 'medium'
+        # Use enhanced search if available
+        if ENHANCED_SEARCH_AVAILABLE and enhanced_search:
+            # Enhanced results with context and summaries
+            enhanced_results = enhanced_search.enhance_search_results(query, raw_results)
+            
+            # Generate overall explanation
+            explanation = enhanced_search.get_overall_explanation(query, enhanced_results)
+            
+            # Generate aggregate summary for data reduction
+            aggregate_summary = enhanced_search.generate_aggregate_summary(query, enhanced_results)
+            
+            # Format results for frontend
+            formatted = []
+            for idx, result in enumerate(enhanced_results):
+                formatted.append({
+                    'name': result['name'],
+                    'score': result['score'],
+                    'occurrences': result['occurrences'],
+                    'summary': result['summary'],
+                    'keywords': result['keywords'],
+                    'contexts': result['contexts'],
+                    'relevance': 'high' if idx == 0 else ('medium' if idx < 3 else 'low')
+                })
+            
+            return jsonify({
+                'explanation': explanation,
+                'results': formatted,
+                'aggregate_summary': aggregate_summary
             })
         
-        return jsonify({
-            'explanation': context,
-            'results': formatted
-        })
+        else:
+            # Fallback to basic search (original implementation)
+            top = raw_results[0]
+            context = extract_context(top['content'], query.split())
+            
+            formatted = []
+            for idx, result in enumerate(raw_results):
+                score = int((1 - result['distance']) * 100) if result['distance'] else 100
+                formatted.append({
+                    'name': result['metadata']['name'],
+                    'score': score,
+                    'relevance': 'high' if idx == 0 else 'medium',
+                    'occurrences': 0,
+                    'summary': '',
+                    'keywords': [],
+                    'contexts': []
+                })
+            
+            return jsonify({
+                'explanation': context,
+                'results': formatted
+            })
     
     except Exception as e:
         print(f"Search error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': 'Search failed'}), 500
 
 

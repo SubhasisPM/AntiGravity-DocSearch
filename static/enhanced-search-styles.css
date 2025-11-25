@@ -1,0 +1,180 @@
+/* Enhanced Search Result Styles */
+
+.result-content {
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: var(--spacing-sm);
+    font-size: 0.95rem;
+}
+
+.result-meta {
+    display: flex;
+    gap: var(--spacing-sm);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Score Badge */
+.score-badge {
+    background: var(--accent-gradient);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+}
+
+/* Summary Section */
+.result-summary {
+    margin: var(--spacing-sm) 0;
+    padding: var(--spacing-md);
+    background: hsla(160, 70%, 45%, 0.05);
+    border-left: 3px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    line-height: 1.8;
+}
+
+.result-summary p {
+    margin-bottom: var(--spacing-xs);
+    white-space: pre-line;
+}
+
+.result-summary p:last-child {
+    margin-bottom: 0;
+}
+
+/* Keywords Section */
+.result-keywords {
+    margin: var(--spacing-sm) 0;
+}
+
+.result-keywords strong {
+    color: var(--text-primary);
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.9rem;
+}
+
+.keyword-tag {
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    margin: 0.25rem 0.25rem 0.25rem 0;
+    background: hsla(210, 75%, 45%, 0.15);
+    color: var(--accent-secondary);
+    border: 1px solid hsla(210, 75%, 45%, 0.3);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all var(--transition-fast);
+    cursor: pointer;
+}
+
+.keyword-tag:hover {
+    background: hsla(210, 75%, 45%, 0.25);
+    border-color: hsla(210, 75%, 45%, 0.5);
+    transform: translateY(-1px);
+}
+
+/* High TF-IDF Score Keyword Styles */
+.keyword-tag.high-tfidf {
+    background: hsla(45, 90%, 50%, 0.15);
+    border-color: hsla(45, 90%, 50%, 0.4);
+    color: hsl(45, 90%, 70%);
+    box-shadow: 0 0 10px hsla(45, 90%, 50%, 0.1);
+}
+
+.keyword-tag.high-tfidf:hover {
+    background: hsla(45, 90%, 50%, 0.25);
+    border-color: hsla(45, 90%, 50%, 0.6);
+    box-shadow: 0 0 15px hsla(45, 90%, 50%, 0.2);
+}
+
+/* Context Snippets Section */
+.result-contexts {
+    margin: var(--spacing-sm) 0;
+}
+
+.result-contexts strong {
+    color: var(--text-primary);
+    display: block;
+    margin-bottom: var(--spacing-xs);
+    font-size: 0.9rem;
+}
+
+.context-snippet {
+    margin: var(--spacing-xs) 0;
+    padding: var(--spacing-sm);
+    background: hsla(200, 20%, 12%, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+}
+
+.context-snippet:hover {
+    background: hsla(200, 20%, 15%, 0.7);
+    border-color: var(--border-glow);
+}
+
+.context-snippet em {
+    color: var(--text-secondary);
+    font-style: italic;
+    line-height: 1.6;
+}
+
+/* Relevance Badges */
+.relevance-badge {
+    padding: 0.3rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.relevance-badge.high {
+    background: hsla(140, 60%, 45%, 0.15);
+    color: hsl(140, 60%, 55%);
+    border: 1px solid hsla(140, 60%, 45%, 0.3);
+}
+
+.relevance-badge.medium {
+    background: hsla(45, 80%, 45%, 0.15);
+    color: hsl(45, 80%, 55%);
+    border: 1px solid hsla(45, 80%, 45%, 0.3);
+}
+
+.relevance-badge.low {
+    background: hsla(0, 0%, 45%, 0.15);
+    color: hsl(0, 0%, 65%);
+    border: 1px solid hsla(0, 0%, 45%, 0.3);
+}
+
+/* Card Border Colors by Relevance */
+.result-card.high {
+    border-left-color: hsl(140, 60%, 45%);
+}
+
+.result-card.medium {
+    border-left-color: hsl(45, 80%, 45%);
+}
+
+.result-card.low {
+    border-left-color: var(--text-muted);
+}
+
+/* Enhanced Context Analysis Formatting */
+.response-content {
+    white-space: pre-wrap;
+    line-height: 1.9;
+}
+
+.response-content strong {
+    color: var(--accent-primary);
+    font-weight: 600;
+    font-size: 1.05em;
+}

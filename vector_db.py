@@ -4,48 +4,36 @@ Fast semantic search with caching and batch operations
 """
 
 import chromadb
-from sentence_transformers import SentenceTransformer
 import os
 
 
 class VectorMemory:
-    def __init__(self, persist_directory="./chroma_db", model_name='all-MiniLM-L6-v2'):
-        """Initialize ChromaDB with optimized settings"""
+    def __init__(self, persist_directory="./chroma_db"):
+        """Initialize ChromaDB with default embedding function"""
         self.persist_directory = persist_directory
         
         # Initialize ChromaDB (New API)
         self.client = chromadb.PersistentClient(path=persist_directory)
         
-        # Load lightweight embedding model
-        print(f"Loading embedding model: {model_name}...")
-        self.embedding_model = SentenceTransformer(model_name)
-        self.embedding_model.max_seq_length = 256  # Limit for speed
-        
-        # Get or create collection
+        # Get or create collection with default embedding function
+        print(f"Initializing ChromaDB with default embeddings...")
         self.collection = self.client.get_or_create_collection(
             name="documents",
             metadata={"description": "Fast document search"}
+            # ChromaDB will use its default 'all-MiniLM-L6-v2' embedding function
         )
         
         print(f"[OK] Vector DB initialized: {self.collection.count()} documents")
     
     def add_document(self, doc_id, content, metadata):
-        """Add document with optimized embedding"""
+        """Add document with automatic embedding"""
         try:
             # Truncate very long content for speed
             if len(content) > 10000:
                 content = content[:10000] + "..."
             
-            # Generate embedding (cached by model)
-            embedding = self.embedding_model.encode(
-                content,
-                show_progress_bar=False,
-                convert_to_numpy=True
-            ).tolist()
-            
-            # Add to collection
+            # Add to collection (ChromaDB handles embedding automatically)
             self.collection.add(
-                embeddings=[embedding],
                 documents=[content],
                 metadatas=[metadata],
                 ids=[str(doc_id)]
@@ -64,7 +52,6 @@ class VectorMemory:
         """Batch add for better performance"""
         try:
             ids = []
-            embeddings = []
             contents = []
             metadatas = []
             
@@ -77,17 +64,8 @@ class VectorMemory:
                 contents.append(content)
                 metadatas.append(metadata)
             
-            # Batch encode (much faster!)
-            embeddings = self.embedding_model.encode(
-                contents,
-                show_progress_bar=True,
-                convert_to_numpy=True,
-                batch_size=32
-            ).tolist()
-            
-            # Batch add
+            # Batch add (ChromaDB handles embeddings automatically)
             self.collection.add(
-                embeddings=embeddings,
                 documents=contents,
                 metadatas=metadatas,
                 ids=ids
@@ -112,16 +90,9 @@ class VectorMemory:
             return self._search_cache[cache_key]
         
         try:
-            # Generate query embedding
-            query_embedding = self.embedding_model.encode(
-                query,
-                show_progress_bar=False,
-                convert_to_numpy=True
-            ).tolist()
-            
-            # Search in collection
+            # Search in collection (ChromaDB handles query embedding automatically)
             results = self.collection.query(
-                query_embeddings=[query_embedding],
+                query_texts=[query],
                 n_results=min(n_results, self.collection.count())
             )
             
