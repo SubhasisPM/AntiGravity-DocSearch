@@ -5,25 +5,33 @@ Fast semantic search with caching and batch operations
 
 import chromadb
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class VectorMemory:
-    def __init__(self, persist_directory="./chroma_db"):
+    def __init__(self, persist_directory="./chroma_db", max_cache_size=100):
         """Initialize ChromaDB with default embedding function"""
         self.persist_directory = persist_directory
+        self.max_cache_size = max_cache_size
         
         # Initialize ChromaDB (New API)
         self.client = chromadb.PersistentClient(path=persist_directory)
         
         # Get or create collection with default embedding function
-        print(f"Initializing ChromaDB with default embeddings...")
+        logging.info(f"Initializing ChromaDB with default embeddings...")
         self.collection = self.client.get_or_create_collection(
             name="documents",
             metadata={"description": "Fast document search"}
             # ChromaDB will use its default 'all-MiniLM-L6-v2' embedding function
         )
         
-        print(f"[OK] Vector DB initialized: {self.collection.count()} documents")
+        # Initialize search cache with size tracking
+        self._search_cache = {}
+        
+        logging.info(f"[OK] Vector DB initialized: {self.collection.count()} documents")
     
     def add_document(self, doc_id, content, metadata):
         """Add document with automatic embedding"""
@@ -41,11 +49,11 @@ class VectorMemory:
             
             # Persistence is automatic in new ChromaDB
             
-            print(f"[OK] Added: {metadata.get('name', doc_id)}")
+            logging.info(f"[OK] Added: {metadata.get('name', doc_id)}")
             return True
         
         except Exception as e:
-            print(f"[ERROR] Add error: {e}")
+            logging.error(f"[ERROR] Add document error: {e}", exc_info=True)
             return False
     
     def add_documents_batch(self, documents):
@@ -72,19 +80,21 @@ class VectorMemory:
             )
             
             # Persistence is automatic
-            print(f"[OK] Batch added: {len(documents)} documents")
+            logging.info(f"[OK] Batch added: {len(documents)} documents")
             return True
         
         except Exception as e:
-            print(f"[ERROR] Batch add error: {e}")
+            logging.error(f"[ERROR] Batch add error: {e}", exc_info=True)
             return False
     
     def search(self, query, n_results=5):
-        """Cached semantic search"""
+        """Cached semantic search with enforced cache size limit"""
+        if not query or not query.strip():
+            logging.warning("Empty search query provided")
+            return []
+            
         # Manual caching (lru_cache doesn't work with instance methods)
-        cache_key = (query, n_results)
-        if not hasattr(self, '_search_cache'):
-            self._search_cache = {}
+        cache_key = (query.strip(), n_results)
         
         if cache_key in self._search_cache:
             return self._search_cache[cache_key]
@@ -107,16 +117,20 @@ class VectorMemory:
                         'distance': results['distances'][0][i] if 'distances' in results else 0
                     })
             
-            # Cache the result (limit cache size to 100)
-            if len(self._search_cache) >= 100:
-                # Remove oldest entry
-                self._search_cache.pop(next(iter(self._search_cache)))
+            # Enforce cache size limit to prevent memory leaks
+            if len(self._search_cache) >= self.max_cache_size:
+                # Remove oldest 20% of entries when limit reached
+                num_to_remove = max(1, self.max_cache_size // 5)
+                for _ in range(num_to_remove):
+                    if self._search_cache:
+                        self._search_cache.pop(next(iter(self._search_cache)))
+            
             self._search_cache[cache_key] = formatted
             
             return formatted
         
         except Exception as e:
-            print(f"[ERROR] Search error: {e}")
+            logging.error(f"[ERROR] Search error for query '{query}': {e}", exc_info=True)
             return []
     
     def get_all_documents(self):
@@ -134,54 +148,52 @@ class VectorMemory:
             } for i in range(len(results['ids']))]
         
         except Exception as e:
-            print(f"[ERROR] Get all error: {e}")
+            logging.error(f"[ERROR] Get all documents error: {e}")
             return []
     
     def delete_document(self, doc_id):
-        """Delete document"""
+        """Delete document and clear cache"""
         try:
             self.collection.delete(ids=[str(doc_id)])
-            if hasattr(self, '_search_cache'):
-                self._search_cache.clear()  # Clear search cache
-            print(f"[OK] Deleted: {doc_id}")
+            self._search_cache.clear()  # Clear search cache
+            logging.info(f"[OK] Deleted: {doc_id}")
             return True
         except Exception as e:
-            print(f"[ERROR] Delete error: {e}")
+            logging.error(f"[ERROR] Delete error for {doc_id}: {e}", exc_info=True)
             return False
     
     def clear_all(self):
-        """Clear all documents"""
+        """Clear all documents and reset collection"""
         try:
             self.client.delete_collection("documents")
             self.collection = self.client.create_collection(
                 name="documents",
                 metadata={"description": "Fast document search"}
             )
-            if hasattr(self, '_search_cache'):
-                self._search_cache.clear()  # Clear cache
-            print("[OK] Cleared all documents")
+            self._search_cache.clear()  # Clear cache
+            logging.info("[OK] Cleared all documents")
             return True
         except Exception as e:
-            print(f"[ERROR] Clear error: {e}")
+            logging.error(f"[ERROR] Clear all error: {e}", exc_info=True)
             return False
     
     def get_stats(self):
         """Get database statistics"""
-        cache_size = len(self._search_cache) if hasattr(self, '_search_cache') else 0
+        cache_size = len(self._search_cache)
         return {
             'total_documents': self.collection.count(),
             'persist_directory': self.persist_directory,
-            'cache_size': cache_size
+            'cache_size': cache_size,
+            'max_cache_size': self.max_cache_size
         }
     
     def optimize(self):
-        """Optimize database (run periodically)"""
+        """Optimize database by clearing cache"""
         try:
-            # Clear search cache
-            if hasattr(self, '_search_cache'):
-                self._search_cache.clear()
-            print("[OK] Database optimized")
+            cache_size_before = len(self._search_cache)
+            self._search_cache.clear()
+            logging.info(f"[OK] Database optimized - cleared {cache_size_before} cache entries")
             return True
         except Exception as e:
-            print(f"[ERROR] Optimize error: {e}")
+            logging.error(f"[ERROR] Optimize error: {e}", exc_info=True)
             return False

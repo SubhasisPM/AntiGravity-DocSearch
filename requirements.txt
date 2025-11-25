@@ -6,4 +6,5 @@ pdf2image
 Werkzeug
 chromadb
 sentence-transformers
+numpy
 gunicorn

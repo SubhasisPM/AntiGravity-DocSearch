@@ -5,16 +5,19 @@ Fast, clean document search with AI-powered vector database
 
 import sys
 import os
+import re
+from functools import lru_cache
+import logging
 
 from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
-from functools import lru_cache
-import os
-import re
 import PyPDF2
 import pytesseract
 from PIL import Image
 from pdf2image import convert_from_bytes
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Optional Vector DB import
 try:
@@ -86,19 +89,20 @@ def read_pdf_fast(file_path):
         with open(file_path, 'rb') as file:
             pdf_reader = PyPDF2.PdfReader(file)
             
-            for page in pdf_reader.pages:
+            # Use enumerate for O(1) page indexing instead of O(n) index lookup
+            for page_num, page in enumerate(pdf_reader.pages):
                 page_text = page.extract_text()
                 
                 # Only OCR if page is mostly empty
                 if len(page_text.strip()) < 20:
-                    page_text = perform_ocr_on_page(file_path, pdf_reader.pages.index(page))
+                    page_text = perform_ocr_on_page(file_path, page_num)
                 
                 text_parts.append(page_text)
         
         return ' '.join(text_parts)
     
     except Exception as e:
-        print(f"PDF error: {e}")
+        logging.error(f"PDF reading error for {file_path}: {e}")
         return perform_ocr_full(file_path)
 
 
@@ -114,7 +118,7 @@ def perform_ocr_on_page(file_path, page_num):
             )
         return pytesseract.image_to_string(images[0]) if images else ''
     except Exception as e:
-        print(f"OCR error page {page_num}: {e}")
+        logging.warning(f"OCR error on page {page_num} of {file_path}: {e}")
         return ''
 
 
@@ -125,7 +129,7 @@ def perform_ocr_full(file_path):
             images = convert_from_bytes(file.read(), dpi=200)
         return ' '.join(pytesseract.image_to_string(img) for img in images)
     except Exception as e:
-        print(f"Full OCR error: {e}")
+        logging.error(f"Full OCR error for {file_path}: {e}")
         return ''
 
 
@@ -138,13 +142,17 @@ def read_image_ocr(file_path):
             image.thumbnail((2000, 2000))
         return pytesseract.image_to_string(image)
     except Exception as e:
-        print(f"Image OCR error: {e}")
+        logging.warning(f"Image OCR error for {file_path}: {e}")
         return ''
 
 
 def read_file_content(file_path, filename):
     """Smart file reader with type detection"""
-    ext = filename.rsplit('.', 1)[1].lower()
+    try:
+        ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    except IndexError:
+        logging.error(f"Invalid filename format: {filename}")
+        return ''
     
     readers = {
         'pdf': lambda: read_pdf_fast(file_path),
@@ -161,7 +169,7 @@ def read_file_content(file_path, filename):
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             return f.read()
     except Exception as e:
-        print(f"Read error: {e}")
+        logging.error(f"File read error for {file_path}: {e}")
         return ''
 
 
@@ -248,8 +256,8 @@ def upload_file():
         })
     
     except Exception as e:
-        print(f"Upload error: {e}")
-        return jsonify({'error': 'Upload failed'}), 500
+        logging.error(f"Upload error: {e}", exc_info=True)
+        return jsonify({'error': f'Upload failed: {str(e)}'}), 500
 
 
 @app.route('/search', methods=['POST'])
@@ -328,10 +336,8 @@ def search():
             })
     
     except Exception as e:
-        print(f"Search error: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': 'Search failed'}), 500
+        logging.error(f"Search error: {e}", exc_info=True)
+        return jsonify({'error': f'Search failed: {str(e)}'}), 500
 
 
 @app.route('/documents', methods=['GET'])
@@ -352,7 +358,7 @@ def get_documents():
         return jsonify({'documents': doc_list})
     
     except Exception as e:
-        print(f"Error: {e}")
+        logging.error(f"Error loading documents: {e}")
         return jsonify({'documents': []})
 
 
@@ -369,7 +375,8 @@ def get_stats():
 # ============================================================================
 
 if __name__ == '__main__':
-    print("DocSearch starting...")
-    print(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
-    print(f"Supported formats: {', '.join(app.config['ALLOWED_EXTENSIONS'])}")
+    logging.info("DocSearch starting...")
+    logging.info(f"Upload folder: {app.config['UPLOAD_FOLDER']}")
+    logging.info(f"Supported formats: {', '.join(app.config['ALLOWED_EXTENSIONS'])}")
+    logging.info(f"Vector DB available: {VECTOR_DB_AVAILABLE}")
     app.run(debug=True, host='0.0.0.0', port=5000, threaded=True)

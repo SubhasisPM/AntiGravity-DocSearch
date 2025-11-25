@@ -7,14 +7,23 @@ import re
 from collections import Counter
 import numpy as np
 import math
+import logging
+from functools import lru_cache
 import chromadb.utils.embedding_functions as embedding_functions
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 
 class EnhancedSearch:
     """Enhanced search with context understanding, TF-IDF scoring, and intelligent summarization"""
     
     def __init__(self):
         # Initialize embedding function for summarization pipeline
-        self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        try:
+            self.embedding_fn = embedding_functions.DefaultEmbeddingFunction()
+        except Exception as e:
+            logging.error(f"Failed to initialize embedding function: {e}")
+            self.embedding_fn = None
         
         # Common stop words to filter out
         self.stop_words = {
@@ -30,6 +39,9 @@ class EnhancedSearch:
         self.document_frequencies = {}  # Track how many docs contain each term
         self.total_documents = 0
         self.tfidf_cache = {}
+        
+        # Cache size limit to prevent memory issues
+        self.max_cache_size = 1000
     
     def calculate_tf(self, term, document):
         """
@@ -86,6 +98,15 @@ class EnhancedSearch:
         
         return idf
     
+    @lru_cache(maxsize=500)
+    def _cached_idf(self, term, doc_count_tuple):
+        """Cached IDF calculation for performance"""
+        # doc_count_tuple is (total_docs, docs_with_term) - hashable for caching
+        total_docs, docs_with_term = doc_count_tuple
+        if docs_with_term == 0:
+            return 0.0
+        return math.log((total_docs + 1) / (docs_with_term + 1))
+    
     def calculate_tfidf(self, term, document, all_documents):
         """
         Calculate TF-IDF score for a term in a document
@@ -99,6 +120,9 @@ class EnhancedSearch:
         Returns:
             TF-IDF score
         """
+        if not term or not document:
+            return 0.0
+            
         tf = self.calculate_tf(term, document)
         idf = self.calculate_idf(term, all_documents)
         
@@ -149,6 +173,9 @@ class EnhancedSearch:
         Returns:
             List of context snippets with metadata
         """
+        if not content or not query_word:
+            return []
+            
         content_lower = content.lower()
         query_lower = query_word.lower()
         contexts = []
@@ -364,10 +391,13 @@ class EnhancedSearch:
         Returns:
             Enhanced results with context and summaries
         """
+        if not results or not query:
+            return []
+            
         enhanced_results = []
         
         # Collect all documents for TF-IDF calculation
-        all_documents = [result['content'] for result in results]
+        all_documents = [result.get('content', '') for result in results if result.get('content')]
         
         for result in results:
             content = result['content']
@@ -839,23 +869,29 @@ class EnhancedSearch:
 
     def _clean_and_split(self, text):
         """Step 2: Clean and split text into sentences"""
+        if not text:
+            return []
+            
         # Remove excessive whitespace
         text = re.sub(r'\s+', ' ', text).strip()
         
-        # Split by sentence terminators
-        # Simple split for now, can be enhanced with NLTK/Spacy
-        sentences = re.split(r'(?<=[.!?])\s+', text)
+        # Split by sentence terminators - Fixed regex syntax
+        # Use simple split instead of lookbehind to avoid syntax issues
+        sentences = re.split(r'[.!?]\s+', text)
         
         # Filter out short/empty sentences
-        return [s for s in sentences if len(s.split()) > 5]
+        return [s.strip() for s in sentences if s.strip() and len(s.split()) > 5]
 
     def _compute_embeddings(self, sentences):
         """Step 3: Compute embeddings for all sentences"""
+        if not sentences or not self.embedding_fn:
+            return None
+            
         try:
             # Use ChromaDB's default embedding function
             return self.embedding_fn(sentences)
         except Exception as e:
-            print(f"Embedding error: {e}")
+            logging.error(f"Embedding computation error: {e}")
             return None
 
     def _calculate_cosine_similarity(self, v1, v2):
