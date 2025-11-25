@@ -8,3 +8,7 @@ chromadb
 sentence-transformers
 numpy
 gunicorn
+google-generativeai
+openai
+tiktoken
+python-dotenv

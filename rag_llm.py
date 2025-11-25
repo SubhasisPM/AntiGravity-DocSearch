@@ -7,6 +7,10 @@ import os
 import logging
 from typing import List, Dict, Optional, Generator
 from enum import Enum
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 
@@ -43,8 +47,8 @@ class RAGLLMIntegration:
             temperature: Response creativity (0-1)
             max_tokens: Maximum response length
         """
-        self.provider = LLMProvider(provider.lower())
-        self.api_key = api_key or os.getenv(f"{provider.upper()}_API_KEY")
+        self.provider = self._determine_provider(provider, api_key)
+        self.api_key = api_key or self._get_api_key(self.provider)
         self.temperature = temperature
         self.max_tokens = max_tokens
         
@@ -56,6 +60,37 @@ class RAGLLMIntegration:
         self._initialize_client()
         
         logging.info(f"LLM Integration initialized: {self.provider.value} ({self.model})")
+
+    def _determine_provider(self, requested_provider: str, api_key: Optional[str]) -> LLMProvider:
+        """Determine the best provider based on availability"""
+        if api_key:
+            return LLMProvider(requested_provider.lower())
+            
+        # Check environment variables
+        if os.getenv("OPENAI_API_KEY") and requested_provider == "openai":
+            return LLMProvider.OPENAI
+        if os.getenv("GEMINI_API_KEY") and requested_provider == "gemini":
+            return LLMProvider.GEMINI
+            
+        # If requested provider is mock or ollama, use it
+        if requested_provider in ["mock", "ollama"]:
+            return LLMProvider(requested_provider)
+
+        # Fallback logic
+        if os.getenv("GEMINI_API_KEY"):
+            return LLMProvider.GEMINI
+        if os.getenv("OPENAI_API_KEY"):
+            return LLMProvider.OPENAI
+            
+        return LLMProvider.MOCK
+
+    def _get_api_key(self, provider: LLMProvider) -> Optional[str]:
+        """Get API key from environment"""
+        if provider == LLMProvider.OPENAI:
+            return os.getenv("OPENAI_API_KEY")
+        if provider == LLMProvider.GEMINI:
+            return os.getenv("GEMINI_API_KEY")
+        return None
     
     def _get_default_model(self) -> str:
         """Get default model for each provider"""
@@ -114,6 +149,12 @@ class RAGLLMIntegration:
         """Initialize Ollama client (local)"""
         try:
             import ollama
+            # Test connection
+            try:
+                ollama.list()
+            except Exception:
+                logging.warning("Ollama service might not be running")
+            
             self.client = ollama
             logging.info("Ollama client initialized (local)")
         except ImportError:
@@ -181,28 +222,26 @@ STRICT RULES:
 6. Maintain semantic traceability - every claim must trace back to a source.
 
 OUTPUT FORMAT:
-1. **Direct Answer** (1-2 sentences with citations)
-2. **Crisp Analytical Insights** (Extract 3-6 insights. Each must be factual, directly traceable, decision-focused, and concise. Bullet points with citations.)
-3. **Source Analysis** (For each retrieved document used:
-   - **Score:** Relevance 0-100 (based on semantic match, depth, usefulness)
-   - **Summary:** 1-2 sentence summary
+1. **Executive Summary** (2-3 sentences synthesizing the most critical information. High-level overview.)
+2. **Direct Answer** (Concise, direct response to the specific question.)
+3. **Key Insights** (Extract 3-5 key takeaways. Bullet points with citations. Focus on facts and decisions.)
+4. **Source Analysis** (For each retrieved document used:
+   - **Score:** Relevance 0-100
+   - **Summary:** 1 sentence summary of the document's relevance to this query
    - **Citation:** [Document ID])
-4. **Supporting Evidence** (detailed analysis with citations)
-5. **Data Points** (specific numbers/metrics with citations)
-6. **Suggested Follow-Up Queries** (Generate 3-5 next-step queries the user should explore to deepen research. Each query must be actionable, specific, and logically connected to the current topic.)
-7. **Gaps or Uncertainties** (List any statements that cannot be fully supported or information that is missing. Do not infer.)
+5. **Supporting Evidence** (Detailed analysis/data with citations)
+6. **Suggested Follow-Up Queries** (3 actionable next-step queries)
+7. **Gaps or Uncertainties** (List missing info or limitations)
 
 CITATION FORMAT:
 - Use [Document Name, Page X] after EVERY factual statement
 - Example: "Revenue increased by 25% [Annual Report, Page 5]"
-- Multiple sources: "Churn rate is 15% [Q4 Report, Page 23] compared to industry average of 12% [Industry Benchmark, Page 8]"
 
 QUALITY STANDARDS:
 - Accuracy: Only verifiable facts from sources
 - Completeness: Address all aspects of the question
 - Clarity: Executive-ready language
-- Traceability: Every statement sourced
-- Objectivity: Present facts without speculation"""
+- Traceability: Every statement sourced"""
         
         system = system_prompt or default_system
         
@@ -280,41 +319,33 @@ RESEARCH-GROUNDED ANSWER:"""
     
     def _generate_mock(self, prompt: str) -> str:
         """Generate mock answer for testing - demonstrates research format"""
-        return """**Direct Answer:**
-Based on the retrieved documents, this is a simulated research-grounded response demonstrating the expected output format [Mock Document, Page 1].
+        return """**Executive Summary:**
+This is a simulated response demonstrating the enhanced RAG output format. It confirms that the system is correctly configured to generate structured, evidence-based answers with strict citation requirements [Mock Document, Page 1].
 
-**Crisp Analytical Insights:**
-• **Testing Mode Active:** This response is generated by a mock provider to validate system architecture without incurring API costs [Mock Document, Page 1].
-• **Configuration Required:** Production deployment necessitates configuring a valid LLM provider (OpenAI, Gemini, or Ollama) to enable real-time analysis [System Documentation, Page 1].
-• **Strict Compliance:** The system is hard-coded to enforce citation requirements for every factual claim, ensuring traceability [RAG Guidelines, Page 1].
+**Direct Answer:**
+The system is functioning in MOCK mode, providing a template for research-grade outputs.
+
+**Key Insights:**
+• **Enhanced Structure:** The new output format includes a dedicated Executive Summary for quick information consumption [System Update, Page 1].
+• **Strict Citations:** All factual claims are rigorously cited to ensure traceability and prevent hallucinations [Quality Standards, Page 2].
+• **Source Analysis:** Each used document is scored and summarized to provide context on the information sources [RAG Guidelines, Page 3].
 
 **Source Analysis:**
-• **Score:** 95 | **Summary:** Defines the mock response behavior and testing protocols. | **Citation:** [Mock Document, Page 1]
-• **Score:** 88 | **Summary:** Outlines the system architecture and LLM integration requirements. | **Citation:** [System Documentation, Page 1]
-• **Score:** 92 | **Summary:** Specifies the strict citation and output format guidelines. | **Citation:** [RAG Guidelines, Page 1]
+• **Score:** 95 | **Summary:** Defines the mock response behavior. | **Citation:** [Mock Document, Page 1]
+• **Score:** 90 | **Summary:** Outlines the new output structure updates. | **Citation:** [System Update, Page 1]
+• **Score:** 92 | **Summary:** Specifies citation and quality rules. | **Citation:** [Quality Standards, Page 2]
 
 **Supporting Evidence:**
-The RAG system is designed to provide evidence-grounded answers by retrieving relevant context from indexed documents and synthesizing responses with full semantic traceability [Architecture Document, Page 3]. Each claim must be backed by source citations to ensure accuracy and prevent hallucinations [Quality Standards, Page 2].
-
-**Data Points:**
-• Citation requirement: 100% of factual statements must include sources [Quality Metrics, Page 5]
-• Supported LLM providers: 3 (OpenAI, Gemini, Ollama) [Integration Guide, Page 8]
-• Output format sections: 7 (Direct Answer, Crisp Analytical Insights, Source Analysis, Supporting Evidence, Data Points, Suggested Follow-Up Queries, Gaps or Uncertainties) [Format Specification, Page 12]
+The updated prompt structure enforces a 7-section output format designed to provide both high-level summaries and deep-dive evidence [Architecture Doc, Page 4]. This ensures that users can quickly grasp the main points while having access to detailed backing data.
 
 **Suggested Follow-Up Queries:**
-1. "What are the specific API configuration steps for integrating OpenAI with the RAG pipeline?"
-2. "How does the citation enforcement mechanism work in the RAG system architecture?"
-3. "What performance benchmarks exist for the mock provider versus production LLM providers?"
-4. "What are the cost implications of using different LLM providers (OpenAI vs. Gemini vs. Ollama)?"
-5. "How can I validate that the RAG system is correctly retrieving and ranking documents?"
+1. "How do I switch from MOCK mode to a real LLM provider?"
+2. "What are the specific changes in the new RAG prompt?"
+3. "How does the system calculate relevance scores for source analysis?"
 
 **Gaps or Uncertainties:**
-• This is a MOCK response and does not contain actual analysis of your documents.
-• Specific performance metrics for your dataset are not available in this simulation.
-• To receive real research-grounded answers, please configure a production LLM provider (OpenAI, Gemini, or Ollama) with a valid API key.
-
----
-*Note: This mock demonstrates the research-grade output format. Configure a real LLM for actual document analysis.*"""
+• This is a mock response; no actual document analysis was performed.
+• Real-world performance depends on the selected LLM provider (OpenAI, Gemini, etc.)."""
     
     def _stream_openai(self, response) -> Generator[str, None, None]:
         """Stream OpenAI response"""

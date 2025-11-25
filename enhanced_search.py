@@ -343,7 +343,7 @@ class EnhancedSearch:
             # Convert distance to similarity (0-100)
             semantic_score = max(0, (1 - semantic_distance / 2) * 100)
             score_components.append(semantic_score)
-            weights.append(0.4)  # 40% weight
+            weights.append(0.5)  # 50% weight (Increased)
         
         # 2. TF-IDF score (if documents available)
         if all_documents:
@@ -359,7 +359,7 @@ class EnhancedSearch:
                 avg_tfidf = sum(tfidf_scores) / len(tfidf_scores) if tfidf_scores else 0
                 tfidf_score = min(100, avg_tfidf * 200)  # Scale up
                 score_components.append(tfidf_score)
-                weights.append(0.3)  # 30% weight
+                weights.append(0.1)  # 10% weight (Decreased)
         
         # 3. Exact word match score
         query_words = set(query.lower().split())
@@ -368,7 +368,7 @@ class EnhancedSearch:
         exact_matches = sum(1 for word in query_words if word in content_lower)
         exact_match_score = (exact_matches / len(query_words)) * 100 if query_words else 0
         score_components.append(exact_match_score)
-        weights.append(0.2)  # 20% weight
+        weights.append(0.3)  # 30% weight (Increased)
         
         # 4. Query word frequency score
         word_count = len(content_lower.split())

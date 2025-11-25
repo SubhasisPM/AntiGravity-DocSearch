@@ -7,6 +7,10 @@ import os
 import re
 import logging
 from functools import lru_cache
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 from flask import Flask, render_template, request, jsonify
 from werkzeug.utils import secure_filename
@@ -543,6 +547,18 @@ def rag_search():
     except Exception as e:
         logging.error(f"RAG search error: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/config', methods=['GET'])
+def get_config():
+    """Get server configuration status"""
+    return jsonify({
+        'openai_available': bool(os.getenv('OPENAI_API_KEY')),
+        'gemini_available': bool(os.getenv('GEMINI_API_KEY')),
+        'vector_db_available': VECTOR_DB_AVAILABLE,
+        'rag_available': RAG_AVAILABLE,
+        'query_expander_available': QUERY_EXPANDER_AVAILABLE
+    })
 
 
 if __name__ == '__main__':

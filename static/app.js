@@ -8,6 +8,35 @@ class DocSearchApp {
     init() {
         this.setupEventListeners();
         this.loadDocuments();
+        this.checkSystemStatus();
+    }
+
+    async checkSystemStatus() {
+        try {
+            const response = await fetch('/config');
+            const config = await response.json();
+
+            const statusEl = document.getElementById('system-status');
+            const dotEl = statusEl.querySelector('.status-dot');
+            const textEl = statusEl.querySelector('.status-text');
+
+            let statusText = [];
+            let isHealthy = true;
+
+            if (config.gemini_available) statusText.push('Gemini');
+            if (config.openai_available) statusText.push('OpenAI');
+            if (!config.gemini_available && !config.openai_available) {
+                statusText.push('Mock Mode');
+                isHealthy = false;
+            }
+
+            textEl.textContent = `AI: ${statusText.join('/')}`;
+            statusEl.className = `system-status ${isHealthy ? 'online' : 'offline'}`;
+            statusEl.title = `Vector DB: ${config.vector_db_available ? 'Online' : 'Offline'} | RAG: ${config.rag_available ? 'Ready' : 'Unavailable'}`;
+
+        } catch (error) {
+            console.error('Status check failed:', error);
+        }
     }
 
     setupEventListeners() {
