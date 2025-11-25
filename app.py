@@ -430,9 +430,120 @@ def expand_query_endpoint():
         }), 500
 
 
+
 # ============================================================================
 # RUN APPLICATION
 # ============================================================================
+
+# Import RAG pipeline
+try:
+    from rag_pipeline import create_rag_pipeline
+    RAG_AVAILABLE = True
+    logging.info("✓ RAG Pipeline module loaded")
+except ImportError:
+    logging.warning("RAG Pipeline not available")
+    RAG_AVAILABLE = False
+
+# Initialize RAG pipeline (lazy load)
+rag_pipeline = None
+
+def get_rag_pipeline():
+    """Get or create RAG pipeline instance"""
+    global rag_pipeline
+    if rag_pipeline is None and VECTOR_DB_AVAILABLE and vector_db:
+        try:
+            # Check for API keys in environment
+            provider = "mock"
+            api_key = None
+            
+            if os.environ.get("OPENAI_API_KEY"):
+                provider = "openai"
+                api_key = os.environ.get("OPENAI_API_KEY")
+            elif os.environ.get("GEMINI_API_KEY"):
+                provider = "gemini"
+                api_key = os.environ.get("GEMINI_API_KEY")
+            
+            rag_pipeline = create_rag_pipeline(
+                vector_db=vector_db,
+                llm_provider=provider,
+                llm_api_key=api_key
+            )
+            logging.info(f"RAG Pipeline initialized with {provider} provider")
+        except Exception as e:
+            logging.error(f"Failed to initialize RAG pipeline: {e}")
+    return rag_pipeline
+
+
+@app.route('/rag-search', methods=['POST'])
+def rag_search():
+    """
+    RAG Search Endpoint
+    
+    Request Body:
+    {
+        "query": "string (required)",
+        "provider": "string (optional: 'openai', 'gemini', 'ollama', 'mock')",
+        "api_key": "string (optional)"
+    }
+    
+    Response:
+    {
+        "answer": "string (markdown)",
+        "confidence": "float (0-1)",
+        "sources": ["string"],
+        "context_used": "string",
+        "provider": "string"
+    }
+    """
+    if not RAG_AVAILABLE:
+        return jsonify({'error': 'RAG system not available'}), 503
+        
+    data = request.get_json()
+    query = data.get('query', '').strip()
+    provider = data.get('provider')
+    api_key = data.get('api_key')
+    
+    if not query:
+        return jsonify({'error': 'No query provided'}), 400
+        
+    # Validation: Check provider if specified
+    valid_providers = {'openai', 'gemini', 'ollama', 'mock'}
+    if provider and provider.lower() not in valid_providers:
+        return jsonify({
+            'error': f"Invalid provider '{provider}'. Supported: {', '.join(valid_providers)}"
+        }), 400
+        
+    try:
+        # Get pipeline
+        pipeline = get_rag_pipeline()
+        
+        # Allow temporary provider override if API key provided
+        if provider and api_key:
+            # Create temporary pipeline for this request
+            temp_pipeline = create_rag_pipeline(
+                vector_db=vector_db,
+                llm_provider=provider.lower(),
+                llm_api_key=api_key
+            )
+            response = temp_pipeline.query(query)
+        elif pipeline:
+            # Use shared pipeline
+            response = pipeline.query(query)
+        else:
+            return jsonify({'error': 'RAG pipeline not initialized'}), 500
+            
+        return jsonify({
+            'answer': response.answer,
+            'confidence': response.confidence,
+            'sources': response.sources,
+            'context_used': response.context_used,
+            'provider': provider or (pipeline.llm.provider.value if pipeline else "unknown")
+        })
+        
+    except Exception as e:
+        logging.error(f"RAG search error: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     logging.info("DocSearch starting...")
