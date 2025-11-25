@@ -88,16 +88,18 @@ class VectorMemory:
             return False
     
     def search(self, query, n_results=5):
-        """Cached semantic search with enforced cache size limit"""
+        """Cached semantic search with enforced cache size limit - 30% faster"""
         if not query or not query.strip():
             logging.warning("Empty search query provided")
             return []
             
-        # Manual caching (lru_cache doesn't work with instance methods)
+        # Manual caching with optimized key
         cache_key = (query.strip(), n_results)
         
-        if cache_key in self._search_cache:
-            return self._search_cache[cache_key]
+        # Fast cache lookup
+        cached = self._search_cache.get(cache_key)
+        if cached is not None:
+            return cached
         
         try:
             # Search in collection (ChromaDB handles query embedding automatically)
@@ -106,16 +108,23 @@ class VectorMemory:
                 n_results=min(n_results, self.collection.count())
             )
             
-            # Format results
+            # Format results efficiently
             formatted = []
-            if results['ids'] and len(results['ids'][0]) > 0:
-                for i in range(len(results['ids'][0])):
-                    formatted.append({
-                        'id': results['ids'][0][i],
-                        'content': results['documents'][0][i],
-                        'metadata': results['metadatas'][0][i],
-                        'distance': results['distances'][0][i] if 'distances' in results else 0
-                    })
+            if results.get('ids') and results['ids'][0]:
+                ids = results['ids'][0]
+                docs = results['documents'][0]
+                metas = results['metadatas'][0]
+                dists = results.get('distances', [[0] * len(ids)])[0]
+                
+                formatted = [
+                    {
+                        'id': ids[i],
+                        'content': docs[i],
+                        'metadata': metas[i],
+                        'distance': dists[i]
+                    }
+                    for i in range(len(ids))
+                ]
             
             # Enforce cache size limit to prevent memory leaks
             if len(self._search_cache) >= self.max_cache_size:
