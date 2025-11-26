@@ -8,6 +8,7 @@ import re
 import logging
 from functools import lru_cache
 from dotenv import load_dotenv
+import ingestion
 
 # Load environment variables
 load_dotenv()
@@ -255,35 +256,31 @@ def upload_file():
         
         if not content.strip():
             return jsonify({'error': 'Empty or unreadable file'}), 400
-        
-        # Generate unique ID
+
+        # Generate unique document ID
         doc_id = f"doc_{os.urandom(4).hex()}"
         if vector_db:
-             doc_id = f"doc_{vector_db.get_stats()['total_documents'] + 1}"
-        
-        # Store in vector DB
-        metadata = {
-            'name': filename,
-            'size': os.path.getsize(file_path),
-            'path': file_path
-        }
-        
-        if vector_db:
-            vector_db.add_document(doc_id, content, metadata)
-        
+            doc_id = f"doc_{vector_db.get_stats()['total_documents'] + 1}"
+
+        # Index document using ingestion pipeline (adds to vector DB and BM25)
+        try:
+            ingestion.index_document(file_path, doc_id, title=filename)
+        except Exception as e:
+            logging.error(f"Ingestion error for {file_path}: {e}")
+            return jsonify({'error': f'Ingestion failed: {str(e)}'}), 500
+
         return jsonify({
             'success': True,
             'document': {
                 'id': doc_id,
                 'name': filename,
-                'size': metadata['size']
+                'size': os.path.getsize(file_path)
             }
         })
-    
     except Exception as e:
         logging.error(f"Upload error: {e}", exc_info=True)
         return jsonify({'error': f'Upload failed: {str(e)}'}), 500
-
+        
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -297,73 +294,23 @@ def search():
     if not vector_db:
         return jsonify({'error': 'Vector Database not available. Please check server logs.'}), 503
 
-    if vector_db.get_stats()['total_documents'] == 0:
-        return jsonify({'error': 'No documents uploaded'}), 400
-    
-    try:
-        # Vector search (fast!)
-        raw_results = vector_db.search(query, n_results=5)
-        
-        if not raw_results:
-            return jsonify({'results': [], 'explanation': 'No results found.'})
-        
-        # Use enhanced search if available
-        if ENHANCED_SEARCH_AVAILABLE and enhanced_search:
-            # Enhanced results with context and summaries
-            enhanced_results = enhanced_search.enhance_search_results(query, raw_results)
-            
-            # Generate overall explanation
-            explanation = enhanced_search.get_overall_explanation(query, enhanced_results)
-            
-            # Generate aggregate summary for data reduction
-            aggregate_summary = enhanced_search.generate_aggregate_summary(query, enhanced_results)
-            
-            # Format results for frontend
-            formatted = []
-            for idx, result in enumerate(enhanced_results):
-                formatted.append({
-                    'name': result['name'],
-                    'score': result['score'],
-                    'occurrences': result['occurrences'],
-                    'summary': result['summary'],
-                    'keywords': result['keywords'],
-                    'contexts': result['contexts'],
-                    'relevance': 'high' if idx == 0 else ('medium' if idx < 3 else 'low')
-                })
-            
-            return jsonify({
-                'explanation': explanation,
-                'results': formatted,
-                'aggregate_summary': aggregate_summary
-            })
-        
-        else:
-            # Fallback to basic search (original implementation)
-            top = raw_results[0]
-            context = extract_context(top['content'], query.split())
-            
-            formatted = []
-            for idx, result in enumerate(raw_results):
-                score = int((1 - result['distance']) * 100) if result['distance'] else 100
-                formatted.append({
-                    'name': result['metadata']['name'],
-                    'score': score,
-                    'relevance': 'high' if idx == 0 else 'medium',
-                    'occurrences': 0,
-                    'summary': '',
-                    'keywords': [],
-                    'contexts': []
-                })
-            
-            return jsonify({
-                'explanation': context,
-                'results': formatted
-            })
-    
-    except Exception as e:
-        logging.error(f"Search error: {e}", exc_info=True)
-        return jsonify({'error': f'Search failed: {str(e)}'}), 500
+    # Hybrid retrieval using ingestion module (dense + BM25)
+    results = ingestion.retrieve(query, top_k=20)
 
+    if not results:
+        return jsonify({'results': [], 'explanation': 'No results found.'})
+
+    formatted = []
+    for idx, result in enumerate(results):
+        metadata = result.get('metadata', {})
+        name = metadata.get('name') or metadata.get('doc_id', f'doc_{idx}')
+        formatted.append({
+            'name': name,
+            'score': result.get('score', 0),
+            'relevance': 'high' if idx == 0 else ('medium' if idx < 3 else 'low')
+        })
+
+    return jsonify({'results': formatted, 'explanation': ''})
 
 @app.route('/documents', methods=['GET'])
 def get_documents():

@@ -12,3 +12,8 @@ google-generativeai
 openai
 tiktoken
 python-dotenv
+rank-bm25
+pandas
+openpyxl
+beautifulsoup4
+lxml
